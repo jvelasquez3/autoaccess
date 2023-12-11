@@ -1,0 +1,44 @@
+<!-- templates/base.html -->
+<script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+
+  <style>
+    /* Aplica estilos personalizados para reducir el tamaño de los componentes */
+    body {
+        font-size: 14px; /* Reduce el tamaño del texto en el cuerpo */
+    }
+
+    p {
+        font-size: 14px; /* Reduce el tamaño del texto en el cuerpo */
+    }
+
+    .card-header h4 {
+        font-size: 1rem; /* Reduce el tamaño del título en el encabezado de la tarjeta */
+    }
+
+    .card-img {
+        max-width: 100%; /* Ajusta el tamaño máximo de la imagen dentro de la tarjeta */
+        height: auto; /* Mantiene la proporción de aspecto de la imagen */
+    }
+
+    .table {
+        font-size: 12px; /* Reduce el tamaño del texto en la tabla */
+    }
+
+    .info-label {
+        font-weight: bold;
+    }
+</style>
+
+  <title>{% block title %}Django Auth Tutorial{% endblock %}</title>
+</head>
+<body>
+  <main>
+    {% block content %}
+    {% endblock %}
+  </main>
+</body>
+</html>

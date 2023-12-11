@@ -1,0 +1,374 @@
+<!-- templates/home.html -->
+{% extends 'base.html' %}
+
+{% block title %}Inicio{% endblock %}
+
+{% block content %}
+
+{% load django_bootstrap5 %}
+{% bootstrap_css %}
+{% bootstrap_javascript %}
+
+{% if user.is_authenticated %}
+<script>
+  var tipo = 0
+  var intervalId;
+  var llamadaAjax;
+  var llamaEnProgreso = false;
+  var tipoAccesoGlobal = ''
+  var placasGlobal = ''
+
+  function iniciarReconocimento() {
+    tipo = 1
+    $("#btnIniciarPregrabado").hide()
+    $("#btnIniciarReconocimiento").hide()
+    $("#btnCancelarReconocimiento").show()
+    $("#divLoader").show()
+    $("#btnAutorizarAcceso").hide()
+
+    intervalId = setInterval(analizarImagenCamara, 1000);
+  }
+
+  function cancelarReconocimiento() {
+    if (llamadaAjax) {
+        llamadaAjax.abort();
+    }
+
+    if(tipo == 1){
+      clearInterval(intervalId);
+    }
+    
+    $("#btnIniciarPregrabado").show()
+    $("#btnIniciarReconocimiento").show()
+    $("#btnCancelarReconocimiento").hide()
+    $("#divLoader").hide()
+  }
+
+  function analizarImagenCamara() {
+    if(llamaEnProgreso){
+      return
+    }
+
+    llamaEnProgreso = true
+
+    llamadaAjax = $.ajax({
+          url: "{% url 'iniciar-reconocimiento' %}",
+          type: "GET",
+          dataType: "json",
+          data: {
+            'detectar_vehiculo': $('#chkDetectarVehiculo').is(':checked'),
+            'tipo_acceso': $('input[name="chkTipoAcceso"]:checked').val()
+          },
+          success: function(data) {
+              handleAnalisisSuccess(data, false)
+              llamaEnProgreso = false
+          },
+          error: function(error) {
+              console.error("Error en la llamada", error);
+              llamaEnProgreso = false
+          }
+      });
+  }
+
+  function iniciarPregrabado() {
+    tipo = 2
+    $("#btnIniciarPregrabado").hide()
+    $("#btnIniciarReconocimiento").hide()
+    $("#btnCancelarReconocimiento").show()
+    $("#divLoader").show()
+    $("#btnAutorizarAcceso").hide()
+
+    analizarVideo()
+  }
+
+  
+  function analizarVideo() {
+    llamadaAjax = $.ajax({
+        url: "{% url 'iniciar-pregrabado' %}",
+        type: "GET",
+        dataType: "json",
+        data: {
+          'detectar_vehiculo': $('#chkDetectarVehiculo').is(':checked'),
+          'tipo_acceso': $('input[name="chkTipoAcceso"]:checked').val()
+        },
+        success: function(data) {
+          handleAnalisisSuccess(data, true)
+        },
+        error: function(error) {
+            console.error("Error en la llamada", error);
+            cancelarReconocimiento()
+        }
+    });
+  }
+
+  function autorizarAcceso() {
+    llamadaAjax = $.ajax({
+        url: "{% url 'autorizar-acceso' %}",
+        type: "GET",
+        dataType: "json",
+        data: {
+          'tipo_acceso': tipoAccesoGlobal,
+          'placas': placasGlobal
+        },
+        success: function(data) {
+          handleAnalisisSuccess(data, true)
+        },
+        error: function(error) {
+            console.error("Error en la llamada", error);
+            cancelarReconocimiento()
+        }
+    });
+  }
+
+  function handleAnalisisSuccess(data, detener_al_no_encontrar){
+    if(!data.placa_detectada){
+      if(detener_al_no_encontrar){
+        $("#txtAlertaReconocimiento").text("Placa no detectada")
+        $("#txtAlertaReconocimiento").show()
+        cancelarReconocimiento()
+      }
+    } else if(!data.es_empleado) {
+      if(detener_al_no_encontrar){
+        $("#txtAlertaReconocimiento").text("El vehículo con placas " + data.vehiculo.placas + " no se encuentra registrado.")
+        $("#txtAlertaReconocimiento").show()
+        cancelarReconocimiento()
+      }
+    } else {
+      if(data.vehiculo.empleado.foto) {
+        $("#imgEmpleado").prop('src', data.vehiculo.empleado.foto)
+      } else {
+        $("#imgEmpleado").prop('src', '../media/images/usuario.png')
+      }
+
+      var tipoAcceso = $('input[name="chkTipoAcceso"]:checked').val()
+
+      if(data.detalles_vehiculo != ""){
+
+        $("#cardHeaderEmpleado").removeClass('bg-primary')
+        $("#cardHeaderEmpleado").addClass('bg-danger')
+        $("#txtTituloEmpleado").html((tipoAcceso == 'I' ? "Ingreso " : "Egreso ") + "NO autorizado: El vehículo detectado es un(a) <b>" + data.detalles_vehiculo + "</b>.")
+        $("#btnAutorizarAcceso").show()
+        tipoAccesoGlobal = tipoAcceso
+        placasGlobal = data.vehiculo.placas
+      } else if(!data.autorizado){
+        $("#cardHeaderEmpleado").removeClass('bg-primary')
+        $("#cardHeaderEmpleado").addClass('bg-danger')
+        $("#txtTituloEmpleado").text((tipoAcceso == 'I' ? "Ingreso " : "Egreso ") + "NO autorizado: El empleado no se encuentra en su  horario laboral.")
+        $("#btnAutorizarAcceso").show()
+        tipoAccesoGlobal = tipoAcceso
+        placasGlobal = data.vehiculo.placas
+      } else {
+        $("#btnAutorizarAcceso").hide()
+        var fechaHoraActual = new Date();
+
+        // Extrae la hora, los minutos y los segundos
+        var horas = fechaHoraActual.getHours();
+        var minutos = fechaHoraActual.getMinutes();
+        var segundos = fechaHoraActual.getSeconds();
+
+        // Formatea la hora como una cadena (opcional)
+        var horaFormateada = horas + ':' + minutos + ':' + segundos;
+
+        $("#cardHeaderEmpleado").removeClass('bg-danger')
+        $("#cardHeaderEmpleado").addClass('bg-primary')
+        $("#txtTituloEmpleado").text((tipoAcceso == 'I' ? "Ingreso " : "Egreso ") + "autorizado: " + horaFormateada)
+      }
+
+      nombre = data.vehiculo.empleado.id + ' - ' + data.vehiculo.empleado.apellido1 +
+      (data.vehiculo.empleado.apellido2 == null ? '' : ' ' + data.vehiculo.empleado.apellido2) +
+      ', ' + data.vehiculo.empleado.nombre1 + (data.vehiculo.empleado.nombre2 == null ? '' : ' ' + data.vehiculo.empleado.nombre2)
+
+      $("#txtNombre").text(nombre)
+
+      $("#txtDepartamento").text(data.vehiculo.empleado.departamento.nombre)
+
+      $("#txtPuesto").text(data.vehiculo.empleado.puesto)
+      $("#txtTipoVehiculo").html(data.detalles_vehiculo != "" ? "<b style='color:red;'>" + data.vehiculo.tipo.nombre + "</b>" : data.vehiculo.tipo.nombre)
+      $("#txtMarcaVehiculo").text(data.vehiculo.marca.nombre)
+      $("#txtColorVehiculo").text(data.vehiculo.color.nombre)
+      $("#txtPlacasVehiculo").text(data.vehiculo.placas)
+
+      if(data.vehiculo.empleado.validar_horario){
+        $("#txtValidarHorario").hide();
+      } else {
+        $("#txtValidarHorario").show();
+      }
+
+      if(data.horario.length > 0){
+        var tablaBody = $('#tablaHorarioBody');
+        tablaBody.empty();
+        
+        for (var i = 0; i < data.horario.length; i++) {
+            var fila = '<tr>' +
+                '<td>' + data.horario[i].dia + '</td>' +
+                '<td>' + data.horario[i].hora_inicio + '</td>' +
+                '<td>' + data.horario[i].hora_fin + '</td>' +
+                '</tr>';
+
+            tablaBody.append(fila);
+        }
+
+        $("#tbHorario").show()
+        $("#txtNoHorario").hide()
+      } else {
+        $("#tbHorario").hide()
+        $("#txtNoHorario").show()
+      }
+
+      $("#cardEmpleado").show()
+      
+      cancelarReconocimiento()
+    }
+  }
+</script>
+
+<nav class="navbar navbar-light bg-light">
+  <div class="container-fluid">
+    <a class="navbar-brand d-flex" href="#">
+      <img src="../media/images/talanquera.png" alt="" width="50" height="50" class="d-inline-block align-text-top" style="margin-right: 10px;">
+      <div class="ml-auto">
+        <h4 class="mb-0">AutoAccess</h4>
+        <h6 class="mb-0">Bienvenido {{request.user.username}}</h6>
+      </div>
+    </a>
+
+    <form class="d-flex">
+      <a href="{% url 'admin:index' %}" class="btn btn-outline-success" style="margin-right: 10px;;">Administrador</a>
+      <a href="{% url 'logout' %}" class="btn btn-outline-success">Cerrar sesión</a>
+    </form>
+  </div>
+</nav>
+
+<div style="margin: 50px;">
+
+  <div class="row">
+    <div class="col-md-8 offset-md-2 text-center">
+      <div class="form-check form-check-inline">
+        <input class="form-check-input" type="radio" name="chkTipoAcceso" id="chkIngreso" value="I" checked>
+        <label class="form-check-label" for="chkIngreso">
+          Ingreso
+        </label>
+      </div>
+      <div class="form-check form-check-inline">
+        <input class="form-check-input" type="radio" name="chkTipoAcceso" id="chkEgreso" value="E">
+        <label class="form-check-label" for="chkEgreso">
+          Egreso
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <div class="alert alert-warning alert-dismissible fade show" role="alert" style="display: none;" id="txtAlertaReconocimiento">
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+  </div>
+
+  <div class="card" style="margin: 25px; display: none;" id="cardEmpleado">
+    <div class="card-header bg-primary text-white" id="cardHeaderEmpleado">
+      <div class="row">
+        <div class="col-md-10">
+          <h4 class="mb-0" id="txtTituloEmpleado">Información del Empleado</h4>
+        </div>
+        <div class="col-md-2">
+          <button type="button" class="btn btn-info btn-sm" onclick="autorizarAcceso()" id="btnAutorizarAcceso" style="display: none;">Autorizar acceso</button>
+        </div>
+      </div>
+    </div>
+    <div class="row no-gutters" style="padding: 10px;">
+        <div class="col-md-2 text-center">
+            <!-- Fotografía del empleado -->
+            <img class="card-img" src="../media/images/usuario.png" alt="Fotografía de empleado" id="imgEmpleado">
+        </div>
+        <div class="col-md-6">
+            <div class="card-body">
+                <!-- Nombre completo del empleado -->
+                <h3 class="card-title" id="txtNombre">Nombre Completo del Empleado</h3>
+
+                <!-- Detalles del empleado (Departamento y Puesto) -->
+                <div class="card-text">
+                  <span class="info-label">Departamento:</span>
+                  <span id="txtDepartamento">Departamento del Empleado</span></div>
+                <div class="card-text">
+                  <span class="info-label">Puesto:</span>
+                  <span id="txtPuesto">Puesto del Empleado</span>
+                </div>
+                </br>
+                <h5 class="card-text">Vehículo</h5>
+                <div class="card-text">
+                  <span class="info-label">Tipo:</span>
+                  <span id="txtTipoVehiculo">Tipo de vehículo</span>
+                </div>
+                <div class="card-text">
+                  <span class="info-label">Marca:</span>
+                  <span id="txtMarcaVehiculo">Marca de vehículo</span>
+                </div>
+                <div class="card-text">
+                  <span class="info-label">Color:</span>
+                  <span id="txtColorVehiculo">Color de vehículo</span>
+                </div>
+                <div class="card-text">
+                  <span class="info-label">Placas:</span>
+                  <span id="txtPlacasVehiculo">Placas de vehículo</span>
+                </div>
+                <div class="card-text" id="txtValidarHorario">
+                  <span class="info-label">No verificar horario</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4" >
+          <h5 id="txtNoHorario">El empleado no posee horario ingresado</h5>
+          <table class="table" id="tbHorario">
+              <thead>
+                  <tr>
+                      <th>Día</th>
+                      <th>Entrada</th>
+                      <th>Salida</th>
+                  </tr>
+              </thead>
+              <tbody id="tablaHorarioBody">
+                  <tr>
+                      <td>Lunes</td>
+                      <td>08:00 AM</td>
+                      <td>05:00 PM</td>
+                  </tr>
+                  <!-- Agrega más filas según sea necesario para los demás días -->
+              </tbody>
+          </table>
+        </div>
+    </div>
+
+    <!-- Tabla con el horario del empleado -->
+  </div>
+
+  </br>
+
+  <div class="row" id="divLoader" style="display: none;">
+    <div class="col-md-12 text-center">
+      <div class="spinner-border text-success" role="status">
+        <span class="visually-hidden">Procesando...</span>
+      </div>
+    </div>
+  </div>
+
+</br>
+
+  <div class="row">
+    <div class="col-md-2 offset-md-1">
+      <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" id="chkDetectarVehiculo">
+        <label class="form-check-label" for="chkDetectarVehiculo">Detectar vehículo*</label>
+      </div>
+    </div>
+    <div class="col-md-6 text-center">
+      <button type="button" class="btn btn-primary btn-sm" onclick="iniciarReconocimento()" id="btnIniciarReconocimiento">Iniciar reconocimiento</button>
+      <button type="button" class="btn btn-warning btn-sm" onclick="cancelarReconocimiento()" id="btnCancelarReconocimiento" style="display: none;">Cancelar reconocimiento</button>
+      <button type="button" class="btn btn-primary btn-sm" onclick="iniciarPregrabado()" id="btnIniciarPregrabado">Reconocimiento pregrabado*</button>
+    </div>
+  </div>
+
+</div>
+{% else %}
+  <p>Tu sesión se encuentra cerrada</p>
+  <a href="{% url 'login' %}">Iniciar sesión</a>
+{% endif %}
+{% endblock %}

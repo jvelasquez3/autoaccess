@@ -1,0 +1,42 @@
+<!-- templates/registration/login.html -->
+{% extends 'base.html' %}
+
+{% block title %}Iniciar sesión{% endblock %}
+
+{% block content %}
+
+{% load django_bootstrap5 %}
+{% bootstrap_css %}
+{% bootstrap_javascript %}
+
+<div class="container mt-5">
+  <div class="row justify-content-center">
+      <div class="col-md-6 text-center">
+        <h1>AutoAccess</h1>
+      <img src="../../media/images/talanquera.png" alt="" width="200" height="200" class="d-inline-block align-text-top" style="margin-right: 10px;">
+          <div class="card">
+              <div class="card-header">
+                  <h3 class="text-center">Iniciar Sesión</h3>
+              </div>
+              <div class="card-body">
+                    <form method="post">
+                      {% csrf_token %}
+                      <div class="row">
+                        <div class="col-md-8 offset-md-1" style="text-align: end;">
+                          {{ form.as_p }}
+                          <a href="{% url 'password_reset' %}">Olvidé mi contraseña</a>
+                          </br>
+                          </br>
+                        </div>
+                        <div class="row">
+                          <div class="col-md-10 offset-md-1 text-center">
+                            <button type="submit" class="btn btn-success btn-sm" >Iniciar sesión</button>
+                          </div>
+                      </div>
+                    </form>
+              </div>
+          </div>
+      </div>
+  </div>
+</div>
+{% endblock %}
